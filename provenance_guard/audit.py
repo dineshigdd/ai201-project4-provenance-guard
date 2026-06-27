@@ -40,6 +40,7 @@ def record_decision(
     llm_score: float | None,
     structural_score: float | None = None,
     fused_p_ai: float | None = None,
+    appeal_id: str | None = None,
     status: str = "classified",
 ) -> dict:
     """Append one structured decision entry and return it.
@@ -52,7 +53,8 @@ def record_decision(
         llm_score:        Signal 1's p_ai (probability the text is AI-written).
         structural_score: Signal 2's p_ai (None until Signal 2 ran).
         fused_p_ai:       the blended probability the text is AI (None until fusion).
-        status:           lifecycle marker for the entry.
+        appeal_id:        set when this entry records an appeal (else None).
+        status:           lifecycle marker (`classified`, `under_review`, ...).
     """
     entry = {
         "content_id": content_id,
@@ -63,6 +65,7 @@ def record_decision(
         "llm_score": llm_score,
         "structural_score": structural_score,
         "fused_p_ai": fused_p_ai,
+        "appeal_id": appeal_id,
         "status": status,
     }
 
@@ -92,3 +95,15 @@ def read_entries(limit: int | None = None) -> list[dict]:
         entries = [json.loads(line) for line in fh if line.strip()]
 
     return entries[-limit:] if limit else entries
+
+
+def latest_for(content_id: str) -> dict | None:
+    """Most recent audit entry for a content_id, or None.
+
+    Flow 2: the appeals handler looks up the original decision so the appeal
+    entry can mirror its signal scores.
+    """
+    for entry in reversed(read_entries()):
+        if entry.get("content_id") == content_id:
+            return entry
+    return None

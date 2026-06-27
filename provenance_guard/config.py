@@ -23,3 +23,15 @@ class Config:
 
     # --- Audit log (planning §1.7): append-only JSONL of every decision ---
     AUDIT_LOG_PATH = os.getenv("AUDIT_LOG_PATH", "data/audit_log.jsonl")
+
+    # --- Mutable stores (planning §1 lifecycle, Flow 2 Appeals Store) ---
+    CONTENT_STORE_PATH = os.getenv("CONTENT_STORE_PATH", "data/content_store.json")
+    APPEALS_STORE_PATH = os.getenv("APPEALS_STORE_PATH", "data/appeals_store.json")
+
+    # --- Rate limit on POST /submit (required feature) ---
+    # 10/min: a real writer never submits more than a handful of pieces a minute,
+    #   but a script flooding the system trips this immediately. Each submit also
+    #   costs a Groq LLM round-trip, so this protects the upstream budget too.
+    # 200/day: caps sustained abuse from a single IP; a prolific creator posting
+    #   ~200 pieces in a day is already far beyond realistic human use.
+    SUBMIT_RATE_LIMIT = os.getenv("SUBMIT_RATE_LIMIT", "200 per day;10 per minute")

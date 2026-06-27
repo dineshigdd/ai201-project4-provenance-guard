@@ -35,7 +35,11 @@ def _clamp01(x: float) -> float:
     return max(0.0, min(1.0, x))
 
 
-def _strength_word(confidence: float) -> str:
+def strength_word(confidence: float) -> str:
+    """Map a directional confidence to its §2.5 strength word.
+
+    Shared by the labeller (§3.5) so wording bands have a single source of truth.
+    """
     if confidence >= STRENGTH_VERY_LIKELY:
         return "very likely"
     if confidence >= STRENGTH_LIKELY:
@@ -81,10 +85,10 @@ def fuse(semantic: dict, structural: dict) -> dict:
         strength = None
     elif fused >= 0.5:
         attribution = "ai"
-        strength = _strength_word(confidence)
+        strength = strength_word(confidence)
     else:
         attribution = "human"
-        strength = _strength_word(confidence)
+        strength = strength_word(confidence)
 
     return {
         "fused_p_ai": round(fused, 4),

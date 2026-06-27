@@ -487,6 +487,7 @@ Appeals Workflow Section: Provide the narrative and the appeal flow diagram from
 
 Architecture Diagram: Provide the diagram to show the relationship between the Audit Log, Appeals Store, and the API layer.
 
+Which spec sections you'll provide (label variants + appeals workflow + diagram), what you'll ask for (label generation logic + the /appeal endpoint), and how you'll verify (test all three label variants are reachable and that an appeal updates status correctly).
 
 
 
