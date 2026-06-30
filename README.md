@@ -55,7 +55,9 @@ The **Semantic** and **Structural** signals are fused into a single, unified sco
 > Validation: I validated this by passing controlled input pairs—disagreeing signals vs. agreeing signals—to ensure the confidence score properly trended toward "uncertain" when signals diverged. I specifically tested against a fixture set of clear-human, clear-AI, and ambiguous/short texts to confirm that the scores are well-ordered and that the "uncertain" threshold correctly catches low-conviction verdicts.
 - Examples:
     - High-Confidence Case: An AI-generated essay with uniform sentence lengths and repetitive patterns where both the Semantic signal (high-confidence AI) and Structural signal (uniformity) agree. | Score: 0.95 (Very likely AI)  
+
     - Lower-Confidence Case: A short, ambiguous paragraph where the Semantic signal leans "AI" but the Structural signal finds high "burstiness" (human-like rhythm), causing the disagreement penalty to trigger. | Score: 0.45 (Uncertain)
+
     - Uncertain Case: A submission where the Semantic signal is neutral (due to a lack of clear argumentative style) and the Structural signal returns a 0.50 (due to insufficient length to measure variance), resulting in a failure to clear the confidence gate. | Score: 0.30 (Uncertain)
 
 ## 4. Transparency Label
@@ -68,16 +70,30 @@ The **Semantic** and **Structural** signals are fused into a single, unified sco
 
 ## 5. Rate Limiting
 *   **Limit:** [e.g., 5 requests per minute]
-*   **Reasoning:** [e.g., "This limit prevents automated scraping while allowing a real human writer enough headroom to test different variations of their text."]
+*   **Reasoning:** This limit reasonably prevents automated scraping while allowing a real human writer enough headroom to test different variations of their text.
 
 ## 6. Known Limitations
-*   **[Content Type]:** [e.g., "Short-form poetry."]
-*   **Why:** [e.g., "The structural signal relies on identifying long-form rhythmic patterns, which are absent in short-form content, leading the system to revert to the default or incorrectly prioritize a weaker signal."]
+
+* **Content Type:** tightly-crafted poems.
+* **Why:** The structural signal requires sufficient sentence-length variance to calculate a statistically significant "burstiness" metric. In minimalist, tightly-crafted poems with deliberately uniform line lengths, this variance is absent, causing the structural signal to falsely register the content as "AI-generated." The system mitigates this risk through a disagreement penalty that erodes confidence when the semantic and structural signals conflict, defaulting to an `uncertain` label rather than a false accusation, while providing an appeals workflow to allow for human review.
+
 
 ## 7. Spec Reflection
-*   **How the spec helped:** [e.g., "The section on §3.5 label variants saved me time by forcing me to standardize my strings before I started coding."]
-*   **Implementation divergence:** [e.g., "I initially planned to use a weighted average, but I diverged to a threshold-based fusion because it made the 'uncertain' category easier to trigger when signals conflict."]
+*  **How the spec helped:**
+    The planning process improved my understanding of each system component, allowing for a precise architecture before writing any code. Additionally, the spec helped me critically evaluate the strengths and weaknesses of the system, ensuring that edge cases and limitations were considered from the start.
+
+*   **Implementation divergence:**
+ The label table hard-codes a single strength phrasing — every directional verdict reads "This content was very likely created with AI" / "...very likely written by a person." Only three label variants exist: High-Confidence AI, High-Confidence Human, Uncertain.
+
+What the implementation does: `labels.py:40` pulls a graduated strength word from `fusion.py:38-47`, which has three bands:
+```
+confidence ≥ 0.85 → "very likely"
+confidence ≥ 0.65 → "likely"
+otherwise → "possibly"
+
+```
+So the headline is templated as `f"This content was {strength} created with AI."` and can emit "likely" or "possibly" — wording that never appears in the README table.
+
+Why it diverged: The confidence gate `(fusion.py:27)` opens a directional verdict at 0.50, but the README's flat "very likely" copy would then slap maximum-certainty language on a verdict sitting just barely over the gate (confidence ~0.51). That overclaims. Graduating the strength word lets the headline's tone track the actual confidence — a 0.55 verdict says "possibly," a 0.90 verdict says "very likely" — which is more honest and is consistent with the project's stated transparency/anti-false-certainty goals.
 
 ## 8. AI Usage
-*   **Instance 1:** [What you asked the AI to do] | **My Revision:** [e.g., "The AI provided a naive implementation of the `fuse` function that ignored the signal-disagreement case; I revised it to specifically check for signal divergence and force an 'uncertain' result."]
-*   **Instance 2:** [What you asked the AI to do] | **My Revision:** [e.g., "The AI generated generic rate-limiting code; I overrode it by implementing `Flask-Limiter` with custom error messages that better explain to the user why they were blocked."]
