@@ -5,6 +5,9 @@ label: {level, badge, headline, body}. The body's `{pct}` is the likelihood of
 the *predicted class* as a whole percent; the headline's strength word
 ("very likely" / "likely" / "possibly") comes from the §2.5 bands. All other
 copy is the fixed string literals defined in §3.5.
+
+`level` mirrors the decision's `attribution` ("ai" / "human" / "uncertain") and
+identifies which of the three §3.5 variants was produced.
 """
 
 from provenance_guard.fusion import strength_word

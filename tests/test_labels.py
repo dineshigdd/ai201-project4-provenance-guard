@@ -11,7 +11,7 @@ runs them through fusion (which derives the confidence and attribution per
 are driven directly (instead of live text) so the test is deterministic and
 needs no network / API key.
 
-Run from the project root:  python tests/tranparency_label.test.py
+Run from the project root:  python tests/test_labels.py
 """
 
 import sys

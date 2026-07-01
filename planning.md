@@ -1,30 +1,5 @@
 # Provenance Guard — Planning
 
-Milestone 1 design record. No code here — this defines the contract and the
-reasoning that all later code must implement.
-
----
-
-## 0. Required features (restated in full)
-
-1. **Content Submission Endpoint** — an API endpoint that accepts a piece of
-   text-based content (poem, short-story excerpt, blog post) for attribution
-   analysis, and returns a structured response containing the attribution
-   result, a confidence score, and the transparency-label text shown to users.
-2. **Multi-Signal Detection Pipeline** — at least two *distinct* signals must be
-   used to classify content. Single-signal detection is not acceptable.
-   planning.md and README must explain what each signal captures and why.
-3. **Confidence Scoring with Uncertainty** — return a confidence score, not just
-   a binary label. The score must reflect genuine uncertainty: a 0.51 must
-   produce a meaningfully different label than a 0.95.
-4. **Transparency Label** — a reader-facing label in plain language that makes
-   the confidence meaningful to a non-technical reader, with three written-out
-   variants: high-confidence AI, high-confidence human, and uncertain.
-
-Plus the appeals capability: creators who believe they were misclassified can
-appeal a result.
-
----
 
 ## 1. Architecture narrative — the path of one piece of text
 
@@ -32,10 +7,11 @@ A reader-platform sends one passage of text to Provenance Guard. Here is the
 full journey from submission to the label the user sees, naming every component
 it touches and what each does.
 
-1. **API layer (`POST /submit`).** Receives the HTTP request, validates the
-   payload (content is present, non-empty, within a max length), and assigns the
-   submission an `analysis_id`. It hands the raw text to the detection pipeline.
-   *Job: validation, identity, request/response shaping.*
+1. **API layer (`POST /submit`).** Applies the **rate limiter** (per-IP) first,
+   then receives the HTTP request, validates the payload (text is present,
+   non-empty, within a max length), and assigns the submission a `content_id`. It
+   hands the raw text to the detection pipeline.
+   *Job: abuse protection, validation, identity, request/response shaping.*
 
 2. **Detection pipeline (orchestrator).** Coordinates the rest of the flow. It
    passes the same raw text to both signals, collects their scores, sends them to
@@ -67,22 +43,23 @@ it touches and what each does.
    *Job: make the result human-readable and honest about uncertainty.*
 
 7. **Audit log.** Before responding, the pipeline appends an immutable record:
-   `analysis_id`, timestamp, a hash/snapshot of the input, both raw signal
+   `content_id`, timestamp, a hash/snapshot of the input, both raw signal
    scores, the fused score, confidence, final attribution, and the label shown.
    *Job: make every decision reconstructable later — this is what an appeal
    reviews against.*
 
-8. **API layer (response).** Serializes `analysis_id`, `attribution`,
+8. **API layer (response).** Serializes `content_id`, `attribution`,
    `confidence`, `fused_p_ai`, the `label` object, and the per-signal breakdown
    back to the caller.
 
-The reader's platform renders the `label`. The `analysis_id` is the handle a
+The reader's platform renders the `label`. The `content_id` is the handle a
 creator later uses to appeal.
 
 **Appeal path:** a creator who disputes a result calls `POST /appeal` with the
-`analysis_id`, the attribution they claim is correct, and a statement. The
+`content_id`, their `creator_reasoning`, and optionally the attribution they
+claim is correct. The
 **appeals handler** looks up the original audit record, stores the appeal with
-status `open`, **flips the original content's status to `under_review`**, writes
+status `open`, **flips the original content's status to `under review`**, writes
 a new audit-log entry recording the appeal and the status change, and returns an
 `appeal_id`. That status change is the trigger that alerts the system and the
 human reviewer that this content is currently being contested. Appeals are queued
@@ -90,9 +67,9 @@ for human review, not auto-adjudicated — correct for a system that openly admi
 uncertainty.
 
 **Content status lifecycle:** every analysis carries a `content_status`. On
-submission it is `active`. Receiving an appeal moves it to `under_review` (the
+submission it is `active`. Receiving an appeal moves it to `under review` (the
 required state). A human reviewer later resolves it (e.g. `upheld` / `overturned`)
-— resolution is out of scope for this milestone, but the `under_review` state and
+— resolution is out of scope for this milestone, but the `under review` state and
 its trigger are first-class.
 
 ---
@@ -187,6 +164,17 @@ single confidence score.**
    - confidence **≥ 0.50** and `fused_p_ai ≥ 0.5` → **`ai`**
    - confidence **≥ 0.50** and `fused_p_ai < 0.5` → **`human`**
 
+**Structural abstention (refinement to step 1).** The structural signal is blunt
+on short or ambiguous text and often returns a near-neutral score. When its
+`p_ai` lands within **±0.10 of 0.5** (i.e. 0.40–0.60), it **abstains**: the
+semantic signal alone sets `fused_p_ai` and no disagreement penalty is applied.
+This stops an inconclusive structural read from either diluting a confident
+semantic verdict into `uncertain` or manufacturing a false disagreement penalty.
+The structural signal participates fully in both the blend and the disagreement
+penalty only when it has a clear, directional read (outside that band) — which is
+exactly the case (confident structural vs. confident semantic) that the
+false-positive protection in §3 relies on, so that protection is preserved.
+
 ### The thresholds that separate the three outcomes
 
 The single gate between "uncertain" and a directional verdict is **confidence
@@ -270,11 +258,12 @@ Traced through the system:
    "AI-generated" label, the reader sees the **uncertain** label ("We couldn't
    tell…"), or at worst a low-confidence one. The system is designed so a single
    misfiring signal cannot manufacture a confident wrong verdict.
-5. **Creator appeals.** The poet calls `POST /appeal` with the `analysis_id`,
-   `claimed_attribution = human`, and a statement. The appeals handler pulls the
+5. **Creator appeals.** The poet calls `POST /appeal` with the `content_id`,
+   their `creator_reasoning`, and optionally `claimed_attribution = human`. The
+   appeals handler pulls the
    audit record (which preserves both signal scores, so a reviewer can see
    exactly *why* it misfired — the low burstiness), stores the appeal as `open`,
-   **moves the content's status to `under_review`**, logs the appeal and the
+   **moves the content's status to `under review`**, logs the appeal and the
    status change, and returns an `appeal_id` for a human to review.
 
 **Design consequences this forces (carried into Milestone 2):**
@@ -349,17 +338,20 @@ person."
 
 | Method | Path                 | Accepts                                                                 | Returns                                                                                   |
 |--------|----------------------|-------------------------------------------------------------------------|-------------------------------------------------------------------------------------------|
-| POST   | `/submit`            | `content` (text, required), optional `title`                            | `analysis_id`, `attribution`, `confidence`, `fused_p_ai`, `label`, per-signal `signals`   |
-| POST   | `/appeal`            | `analysis_id`, `claimed_attribution` (ai/human), `statement`            | `appeal_id`, `analysis_id`, `appeal_status`, `content_status`, `claimed_attribution`, `message` |
-| GET    | `/appeal/{id}`       | path `appeal_id`                                                         | `appeal_id`, `analysis_id`, `appeal_status`, `content_status`, `claimed_attribution`, `message` |
+| POST   | `/submit`            | `text` (required; `content` accepted as alias), optional `title`, `creator_id` | `content_id`, `attribution`, `confidence`, `fused_p_ai`, `label`, per-signal `signals`   |
+| POST   | `/appeal`            | `content_id`, `creator_reasoning`, optional `claimed_attribution` (ai/human) | `appeal_id`, `content_id`, `appeal_status`, `content_status`, `claimed_attribution`, `message` |
+| GET    | `/appeal/{id}`       | path `appeal_id`                                                         | `appeal_id`, `content_id`, `appeal_status`, `content_status`, `claimed_attribution`, `message` |
+| GET    | `/log`               | optional `?limit=N`                                                     | `{ entries: [ audit records… ] }`, newest last                                            |
 | GET    | `/health`            | —                                                                       | liveness status                                                                           |
 
 **`POST /submit` request fields**
-- `content` — the text to analyze. Required, non-empty, max length enforced.
+- `text` — the text to analyze. Required, non-empty, max length enforced.
+  (`content` is accepted as an alias for backward compatibility.)
 - `title` — optional label for the piece.
+- `creator_id` — optional identifier for the submitter, echoed back and logged.
 
 **`POST /submit` response fields**
-- `analysis_id` — handle used to appeal this exact decision.
+- `content_id` — handle used to appeal this exact decision.
 - `attribution` — one of `ai` | `human` | `uncertain`.
 - `confidence` — float in [0, 1], genuine uncertainty (see §3 of README).
 - `fused_p_ai` — the blended probability the text is AI, for transparency.
@@ -369,18 +361,28 @@ person."
   num_tokens}} }`, so the decision is inspectable.
 
 **`POST /appeal` request fields**
-- `analysis_id` — which decision is being disputed.
-- `claimed_attribution` — what the creator says is true (`ai` | `human`).
-- `statement` — the creator's supporting explanation.
+- `content_id` — which decision is being disputed.
+- `creator_reasoning` — the creator's supporting explanation. Required, non-empty.
+- `claimed_attribution` — optional; what the creator says is true (`ai` | `human`).
 
 **`POST /appeal` response fields**
 - `appeal_id` — handle for the appeal record.
-- `analysis_id` — the disputed decision.
+- `content_id` — the disputed decision.
 - `appeal_status` — `open` on intake.
-- `content_status` — `under_review` after the appeal is received (it was `active`
+- `content_status` — `under review` after the appeal is received (it was `active`
   on submission). This is the required status change.
 - `claimed_attribution` — what the creator says is true.
 - `message` — a human-readable confirmation.
+
+**Rate limiting (`POST /submit`)**
+- Limit: **200 per day; 10 per minute**, keyed by client IP.
+- Reasoning: 10/min leaves ample headroom for a real writer testing variations
+  while stopping a script from flooding the system; each submit also costs a Groq
+  round-trip, so this protects the upstream token budget. 200/day caps sustained
+  single-IP abuse well beyond realistic human use.
+- Scope: only `/submit` is limited. Read/liveness endpoints (`/health`, `/log`)
+  are not, so monitoring probes aren't throttled. A `429` is returned as JSON.
+  (Full reasoning is documented in the README.)
 
 ---
 
@@ -408,12 +410,12 @@ person."
                                           [Transparency Labeller]
                                                  │  label {level, badge, headline, body}
                                                  ▼
-                                          [Audit Log]  ◀── writes: analysis_id, input snapshot,
+                                          [Audit Log]  ◀── writes: content_id, input snapshot,
                                                  │           both signal scores, fused score,
                                                  │           confidence, attribution, label
                                                  ▼
                                           [API layer]
-                                                 │  analysis_id + attribution + confidence
+                                                 │  content_id + attribution + confidence
                                                  │  + fused_p_ai + label + signals
                                                  ▼
    [Client]  ◀───────────────────────────── structured JSON response
@@ -422,7 +424,7 @@ person."
 ### Flow 2 — Appeal
 
 ```
-            analysis_id, claimed_attribution, statement
+            content_id, creator_reasoning, (optional claimed_attribution)
    [Client] ───────────────────────────────────────────▶ [POST /appeal  API layer]
                                                                   │ appeal payload
                                                                   ▼
@@ -432,13 +434,13 @@ person."
                                                         [Audit Log]  ── returns: original record
                                                                   │
                                                                   │ create appeal (appeal_status = open)
-                                                                  │ set content_status = under_review
+                                                                  │ set content_status = under review
                                                                   ▼
                                                         [Appeals Store]
                                                                   │ appeal_id
                                                                   ▼
-                                                        [Audit Log]  ◀── writes: appeal_id, analysis_id,
-                                                                  │        content_status → under_review
+                                                        [Audit Log]  ◀── writes: appeal_id, content_id,
+                                                                  │        content_status → under review
                                                                   ▼
                                                         [API layer]
                                                                   │ appeal_id + appeal_status
@@ -459,8 +461,15 @@ or the appeal payload.
 
 ## Implementation Rules for AI Assistant
 - **Framework:** Flask (Python).
-- **Persistence:** Use SQLite for Audit Log and Appeals Store (built-in, structured, easy to query).
-- **Atomic Operations:** When updating `content_status` to `under_review`, ensure the write to the Audit Log and the Appeals Store occurs in a single transaction.
+- **Persistence:** The Audit Log is append-only **JSON Lines** (`data/audit_log.jsonl`);
+  the Content and Appeals stores are **JSON files** (`data/content_store.json`,
+  `data/appeals_store.json`). JSONL/JSON was chosen over SQLite for this milestone
+  because the schema is still evolving and the files stay trivially inspectable and
+  greppable; the store functions are the seam where a real database would slot in later.
+- **Atomic Operations:** When updating `content_status` to `under review`, the writes
+  to the Content/Appeals stores and the Audit Log are serialized under a process-level
+  lock so concurrent requests cannot interleave. (A true multi-statement transaction
+  would require moving persistence to SQLite/Postgres — named as future work.)
 - **Independence:** The `Detection Pipeline` must be decoupled. The API layer should pass text into the pipeline and receive a fully formed result object.
 - **JSON Structure:** All API responses MUST adhere to the JSON schema defined in section 4.
 
@@ -506,4 +515,4 @@ Prompt: "Now I am adding the Structural Signal and Confidence Scorer from Sectio
 
 For Milestone 5 (Appeals + Production):
 
-Prompt: "I am implementing the POST /appeal logic from Section 1 and 5. Please generate the route handler that updates the Audit Log and changes the content_status to under_review. Also, implement the label logic from Section 3.5."
+Prompt: "I am implementing the POST /appeal logic from Section 1 and 5. Please generate the route handler that updates the Audit Log and changes the content_status to under review. Also, implement the label logic from Section 3.5."
