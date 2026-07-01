@@ -516,6 +516,3 @@ Prompt: "Now I am adding the Structural Signal and Confidence Scorer from Sectio
 For Milestone 5 (Appeals + Production):
 
 Prompt: "I am implementing the POST /appeal logic from Section 1 and 5. Please generate the route handler that updates the Audit Log and changes the content_status to under review. Also, implement the label logic from Section 3.5."
-
-## Video Demonstration
-[View Video Presentation](https://www.loom.com/share/0625628bf1444096a6e5d8e4ca873ff6)

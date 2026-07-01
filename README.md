@@ -204,3 +204,6 @@ It is important to note that I used AI as an assitant ,and thus I reviewed and r
 - I reviewed and revised the test cases generated to test the detection pipeline and the generated labels.
 - I reviewed and adjusted the rate-limiter range to suit the best-case scenario for this system.
 - I reviewed and revised the text generated for the project's README file.
+
+## Video Demonstration
+[View Video Presentation](https://www.loom.com/share/0625628bf1444096a6e5d8e4ca873ff6)
