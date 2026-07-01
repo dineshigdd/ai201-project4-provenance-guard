@@ -74,6 +74,27 @@ The **Semantic** and **Structural** signals are fused into a single, unified sco
     - **Limit:** 200 per day and 10 per minute
     - **Reasoning:** This limit reasonably prevents automated scraping while allowing a real human writer enough headroom to test different variations of their text.
 
+ The command to test rate limiter:
+ ```bash
+ $ for i in $(seq 1 12); do   curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:5000/submit     -H "Content-Type: application/json"     -d '{"text": "This is a test submission for rate limit testing purposes only.", "creator_id": "ratelimit-test"}'; done
+ ```
+
+**Output**
+```bash
+200
+200
+200
+200
+200
+200
+200
+200
+200
+200
+429
+429
+```
+
 ## 6. Audit Log
 - The system maintains a comprehensive audit log that records every attribution decision and subsequent appeal. You can access the structured event history by navigating to `http://localhost:5000/log`. Below are representative entries from the log:
 
