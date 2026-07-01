@@ -183,7 +183,3 @@ It is important to note that I used AI as an assitant ,and thus I reviewed and r
 - I reviewed and revised the test cases generated to test the detection pipeline and the generated labels.
 - I reviewed and adjusted the rate-limiter range to suit the best-case scenario for this system.
 - I reviewed and revised the text generated for the project's README file.
-
-
-*   **Instance 1:** [What you asked the AI to do] | **My Revision:** [e.g., "The AI provided a naive implementation of the `fuse` function that ignored the signal-disagreement case; I revised it to specifically check for signal divergence and force an 'uncertain' result."]
-*   **Instance 2:** [What you asked the AI to do] | **My Revision:** [e.g., "The AI generated generic rate-limiting code; I overrode it by implementing `Flask-Limiter` with custom error messages that better explain to the user why they were blocked."]
