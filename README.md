@@ -173,7 +173,7 @@ Why it diverged: The confidence gate `(fusion.py:34)` opens a directional verdic
 - I used AI tools for fine-tnning the `plannig.md` based on requirements
     While planning.md began as a rough draft, it was refined with component-level details to streamline the implementation process.
 - Implementation and Development of Test Cases
-    I used AI to develop two test cases to verify both the detection pipeline and the transparency label generation logic.
+    I used AI to develop three test cases for verifying the detection pipeline, transparency labels, and confidence scoring
 - README Documentation
     I utilized AI to assist in drafting and refining the project's README file where necessary.
 
