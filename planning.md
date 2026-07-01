@@ -187,7 +187,7 @@ The single gate between "uncertain" and a directional verdict is **confidence
 | ≥ 0.50     | ≥ 0.50       | `ai`        |
 | ≥ 0.50     | < 0.50       | `human`     |
 
-Within a directional verdict, the wording strength scales with confidence:
+Within a directional verdict, the wording strength scales with confidence:  
 **≥ 0.85 → "very likely", ≥ 0.65 → "likely", 0.50–0.65 → "possibly".**
 
 ### What does a confidence of 0.6 mean to the system?
